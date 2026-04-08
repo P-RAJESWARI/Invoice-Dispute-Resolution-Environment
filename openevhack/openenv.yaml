@@ -1,0 +1,171 @@
+# OpenEnv Environment Manifest
+# This file tells the OpenEnv hub about your environment.
+# Specification: https://github.com/openenvhub/openenv
+
+name: invoice-dispute-env
+version: "1.0.0"
+description: >
+  A reinforcement learning environment for resolving billing disputes.
+  Agents learn to analyze invoices, customer complaints, and company policies
+  to make optimal resolution decisions while maintaining customer satisfaction
+  and policy compliance. Includes three difficulty levels: easy, medium, hard.
+
+author: OpenEV Hackathon Team
+license: MIT
+
+# Real-world task simulation
+task_type: real_world
+domain: customer_service
+application: billing_dispute_resolution
+
+# Environment characteristics
+characteristics:
+  - multi_step: true
+  - partially_observable: true
+  - stochastic: true
+  - continuous_action_space: false
+  - episodic: true
+
+# Difficulty levels
+difficulties:
+  - easy:
+      description: "Obvious disputes with clear resolution (80%+ baseline)"
+      duration: "1-3 steps"
+  - medium:
+      description: "Ambiguous cases requiring careful analysis (50%+ baseline)"
+      duration: "2-4 steps"
+  - hard:
+      description: "Complex scenarios with multiple perspectives (30%+ baseline)"
+      duration: "3-5 steps"
+
+# OpenEnv API Endpoints
+api:
+  reset:
+    method: POST
+    path: /reset
+    description: "Initialize new episode with specified difficulty"
+    request_schema: "ResetRequest"
+    response_schema: "DisputeObservation"
+  
+  step:
+    method: POST
+    path: /step
+    description: "Submit resolution decision and get feedback"
+    request_schema: "DisputeAction"
+    response_schema: "DisputeObservation"
+  
+  state:
+    method: GET
+    path: /state
+    description: "Get current environment state"
+    response_schema: "DisputeState"
+  
+  health:
+    method: GET
+    path: /health
+    description: "Health check endpoint"
+
+# Observation and Action spaces
+observation:
+  type: structured
+  schema: DisputeState
+  fields:
+    - invoice_id: string
+    - invoice_amount: float
+    - invoice_date: string
+    - customer_tier: enum[standard, premium, enterprise]
+    - dispute_type: enum[billing_error, service_failure, duplicate_charge, unauthorized_charge, other]
+    - customer_message: string
+    - line_items: array
+    - customer_history: object
+    - policy: object
+
+action:
+  type: structured
+  schema: DisputeAction
+  fields:
+    - decision: enum[full_refund, partial_refund, reject, escalate, request_info]
+    - response_text: string
+    - refund_amount: optional[float]
+
+# Reward function
+reward:
+  type: continuous
+  range: [-1.0, 1.0]
+  components:
+    - correctness: "Does the decision align with policy and evidence?"
+    - efficiency: "How many steps to resolution?"
+    - customer_satisfaction: "Would customer be satisfied?"
+    - policy_compliance: "Does decision follow company rules?"
+
+# Baseline agent performance
+baseline:
+  easy:
+    expected_reward: 0.80
+    episode_length: 2.1
+  medium:
+    expected_reward: 0.50
+    episode_length: 3.2
+  hard:
+    expected_reward: 0.30
+    episode_length: 4.1
+
+# Validation requirements
+validation:
+  required_schema_compliance: true
+  required_grader: true
+  required_baseline: true
+  required_episodes: 10
+
+# Action space
+action:
+  type: DisputeAction
+  fields:
+    - name: decision
+      type: string
+      enum: [full_refund, partial_refund, reject, escalate, request_info]
+    - name: response_text
+      type: string
+    - name: refund_amount
+      type: float
+      optional: true
+
+# Observation space
+observation:
+  type: DisputeObservation
+  fields:
+    - name: step_result
+      type: string
+    - name: reward
+      type: float
+      range: [-1.0, 1.0]
+    - name: done
+      type: boolean
+    - name: feedback
+      type: string
+    - name: customer_reaction
+      type: string
+      optional: true
+
+# Reward structure
+reward:
+  range: [-1.0, 1.0]
+  components:
+    - Decision correctness:    +0.5
+    - Policy compliance:       +0.2
+    - Response quality (LLM):  +0.2
+    - Efficiency bonus:        +0.1
+    - Wrong decision penalty:  -0.3
+    - Policy violation:        -0.2
+    - Timeout penalty:         -0.2
+
+# Episode config
+episode:
+  max_steps: 3
+  termination: on terminal action (full_refund, partial_refund, reject, escalate)
+
+# Server
+server:
+  dockerfile: server/Dockerfile
+  port: 7860
+  health_check: /health
