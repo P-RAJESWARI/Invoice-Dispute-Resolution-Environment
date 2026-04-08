@@ -2,7 +2,7 @@
 Invoice Dispute Resolution Environment — FastAPI Server
 Exposes the environment via HTTP endpoints compatible with OpenEnv.
 """
-
+from typing import Optional
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -107,19 +107,26 @@ def health_check():
 
 
 @app.post("/reset", response_model=DisputeObservation)
-def reset(request: ResetRequest):
+def reset(request: Optional[ResetRequest] = None):
     """
-    Start a new dispute episode at the specified difficulty level.
-    Difficulty: easy (obvious disputes), medium (ambiguous), hard (complex)
-    Returns the initial observation (dispute briefing).
+    Start a new dispute episode.
+    Defaults to 'easy' if no difficulty provided.
     """
-    if request.difficulty not in ["easy", "medium", "hard"]:
-        raise HTTPException(status_code=400, detail="Difficulty must be: easy, medium, or hard")
 
-    # Reinitialize environment with requested difficulty
+    difficulty = "easy"  # default
+
+    if request and request.difficulty:
+        if request.difficulty not in ["easy", "medium", "hard"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Difficulty must be: easy, medium, or hard"
+            )
+        difficulty = request.difficulty
+
     global env
-    env = InvoiceDisputeEnv(difficulty=request.difficulty)
+    env = InvoiceDisputeEnv(difficulty=difficulty)
     obs = env.reset()
+
     return obs
 
 
@@ -152,7 +159,10 @@ def get_state():
 def create_app() -> FastAPI:
     return app
 
+import uvicorn
 
+def main():
+    uvicorn.run("server.app:app",host="0.0.0.0",port=7860)
+    
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=7860)
+    main()
